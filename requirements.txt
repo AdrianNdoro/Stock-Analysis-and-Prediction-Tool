@@ -1,0 +1,5 @@
+# Runtime dependencies (Phase 1). Later phases add scipy, statsmodels, plotly, streamlit, etc.
+pandas>=2.2
+numpy>=1.26
+yfinance>=0.2.54
+python-dotenv>=1.0
