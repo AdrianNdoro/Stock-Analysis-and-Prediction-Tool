@@ -6,6 +6,10 @@ import argparse
 import sys
 
 from stock_analyzer.analysis.pipeline import AnalysisResult, analyze_ticker
+from stock_analyzer.backtest.reliability import assess
+from stock_analyzer.backtest.report import format_report
+from stock_analyzer.backtest.service import backtest_ticker
+from stock_analyzer.backtest.walkforward import BacktestConfig
 from stock_analyzer.config import get_settings
 from stock_analyzer.data.service import build_default_service
 from stock_analyzer.exceptions import StockAnalyzerError
@@ -65,6 +69,12 @@ def print_forecast(f: ForecastResult) -> None:
                 f"typical {rng} {cur}, target {sc.target_price:,.2f}"
             )
             print(f"       {sc.indicator_context}")
+    if f.reliability:
+        print("\nMODEL RELIABILITY (from past walk-forward checks on this stock)")
+        for label, rel in f.reliability.items():
+            print(f"  {label}: {rel.headline}")
+            for line in rel.details:
+                print(f"       {line}")
     for w in a.warnings:
         print(f"WARNING: {w}")
 
@@ -75,7 +85,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fundamentals", action="store_true", help="also fetch fundamentals")
     parser.add_argument("--analyze", action="store_true", help="technical + risk analysis")
     parser.add_argument("--simulate", action="store_true", help="Monte Carlo + scenarios")
-    parser.add_argument("--horizon", default="6M", help="1M, 3M, 6M, 1Y or ALL (default 6M)")
+    parser.add_argument("--backtest", action="store_true", help="walk-forward validation report")
+    parser.add_argument(
+        "--horizon", default=None, help="1M, 3M, 6M, 1Y or ALL (default: 6M; ALL for --backtest)"
+    )
+    parser.add_argument("--window", choices=["rolling", "expanding"], default="rolling")
+    parser.add_argument("--no-cache", action="store_true", help="ignore the backtest cache")
+    parser.add_argument(
+        "--reliability", action="store_true", help="with --simulate: add the backtest grade"
+    )
     parser.add_argument("--method", choices=["gbm", "bootstrap"], default="gbm")
     parser.add_argument("--drift", choices=["shrunk", "historical", "neutral"])
     parser.add_argument("--paths", type=int, help="simulations, 10000-50000")
@@ -89,11 +107,33 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging(settings.log_level, settings.log_json)
     try:
         service = build_default_service(settings)
+        if args.backtest:
+            hz = (args.horizon or "ALL").upper()
+            horizons = ("1M", "3M", "6M", "1Y") if hz == "ALL" else (hz,)
+            config = BacktestConfig(
+                method=args.method,
+                drift_mode=args.drift or settings.mc_drift_mode,
+                lookback_years=settings.mc_lookback_years,
+                risk_free_rate=settings.risk_free_rate,
+                window=args.window,
+                horizons=horizons,
+            )
+            report = backtest_ticker(
+                service, args.ticker, config, settings=settings, use_cache=not args.no_cache
+            )
+            print("\n".join(format_report(report)))
+            print("\nRELIABILITY")
+            for h in horizons:
+                print(f"  {h}: {assess(report, h).headline}")
+            print("\nPast checks are not predictions. See README 'Validation' for limits.")
+            return 0
         if args.simulate:
-            horizons = ["1M", "3M", "6M", "1Y"] if args.horizon.upper() == "ALL" else [args.horizon]
+            hz = (args.horizon or "6M").upper()
+            horizons = ["1M", "3M", "6M", "1Y"] if hz == "ALL" else [hz]
             result = forecast_ticker(
                 service, args.ticker, horizons, benchmark=args.benchmark, method=args.method,
                 n_paths=args.paths, seed=args.seed, drift_mode=args.drift, settings=settings,
+                with_reliability=args.reliability,
             )  # fmt: skip
             print_forecast(result)
             return 0

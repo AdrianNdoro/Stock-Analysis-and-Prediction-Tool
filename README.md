@@ -64,6 +64,45 @@ Horizons: 1M, 3M, 6M, 1Y (or ALL). Methods: `gbm` (default) or `bootstrap`. Drif
 Results are scenarios under stated assumptions, never predictions. Settings `MC_PATHS`,
 `MC_LOOKBACK_YEARS`, `MC_DRIFT_MODE` live in `.env` (defaults work without them).
 
+## Backtesting and model validation (Phase 4)
+
+```bat
+python -m stock_analyzer.cli AAPL --backtest                      :: all horizons
+python -m stock_analyzer.cli AAPL --backtest --horizon 3M --method bootstrap --window expanding
+python -m stock_analyzer.cli BP.L --simulate --horizon 3M --reliability   :: forecast + reliability grade
+python -m stock_analyzer.backtest.basket                          :: 12-ticker validation (needs internet)
+python -m stock_analyzer.backtest.tuning                          :: remedy experiment with held-out checks
+```
+
+A walk-forward backtest steps through history every 21 trading days. At each origin it
+calibrates on data up to that day only, forecasts each horizon, and compares with what really
+happened. It reports: how often the 50% and 90% ranges contained the real price (with Wilson
+confidence intervals sized by the number of *independent* checks), Kupiec and Christoffersen
+tests, a PIT histogram, quantile (pinball) loss and interval score versus two baselines
+(zero-drift random walk, the stock's own past returns), and direction hit rate. Results are
+cached for 7 days in the SQLite cache (key = model version + parameters + last data date).
+
+**Reliability grade** (`backtest/reliability.py`, thresholds in `THRESHOLDS`): *Good* (90% range
+within 4 points and 50% range within 8 points of nominal, with at least 30 independent
+checks), *Fair* (within 8 / 12 points), *Poor* (worse), *Not enough history* (under 15
+independent checks; common for 6M and 1Y, where 10 years holds only 14 and 7 non-overlapping
+windows).
+
+**Findings on 12 tickers (live data to Nov 2026, GBM, shrunk drift, 3-year rolling window):**
+pooled 90% ranges contained the real price 88-91% of the time and 50% ranges 48-54%, close to
+nominal. Volatility inflation and EWMA volatility did not beat plain GBM on proper scores in
+held-out tests, so **no model change was made**. The stock-level grades vary (for example
+SAP.DE ran too narrow at 3M-1Y). Baselines: the zero-drift random walk reached similar pooled coverage (84-90% at 90%), so
+the drift assumption adds little, and loss comparisons are mixed per stock (at 3M the model beat
+it for AAPL and lost to it for BP.L). The empirical-quantile baseline was too narrow at long
+horizons (pooled 90% coverage 76% at 6M and 57% at 1Y).
+
+**Limits of this validation:** the basket has survivorship bias and was chosen with hindsight;
+tickers share market moves so they are not independent experiments; 2020 and 2022 dominate
+the sample; checks at the same horizon overlap in time; a constant risk-free rate is used for
+all years. A good grade means "the ranges were about the right width in the past", never
+"the next price will land in the range".
+
 ## Layout
 
 ```
@@ -77,6 +116,15 @@ stock_analyzer/
     risk.py          volatility, drawdown, Sharpe/Sortino, beta, VaR
     benchmarks.py    benchmark list, suffix-based suggestion, currency helpers
     pipeline.py      MarketData -> AnalysisResult
+  backtest/
+    walkforward.py   no-look-ahead engine (rolling/expanding windows, vol remedies)
+    distributions.py closed-form GBM, fast bootstrap (backtest-only), baselines
+    metrics.py       coverage, Wilson, Kupiec, Christoffersen, PIT, pinball, interval score
+    report.py        calibration report + JSON for the cache
+    reliability.py   Good/Fair/Poor/Not enough history (thresholds in one place)
+    service.py       caching and ticker wrapper
+    basket.py        multi-ticker validation script
+    tuning.py        held-out remedy experiment
   models/
     monte_carlo.py   calibration + GBM / bootstrap simulation, percentiles, probabilities
     scenarios.py     bull/base/bear from the simulation, with sensitivity ranges
