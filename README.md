@@ -1,4 +1,4 @@
-# Stock Analyzer (Phases 1-3: data, analysis, risk, simulation, scenarios)
+﻿# Stock Analyzer (Phases 1-4: data, analysis, risk, simulation, scenarios, backtesting)
 
 Educational tool. Not financial advice. Past performance does not guarantee future results.
 Simulated outcomes are scenarios, never predictions.
@@ -101,4 +101,3 @@ Subclass `DataProvider` (`data/providers/base.py`), register it in
 * yfinance is unofficial and personal-use oriented: fine for development, not for a public launch.
 * On free hosts the SQLite file may be wiped on restart; the cache simply rebuilds.
 * Fundamentals unit normalisation (dividend yield, debt/equity) comes in Phase 6.
-"# Stock-Analysis-and-Prediction-Tool" 
