@@ -256,4 +256,6 @@ def terminal_histogram(
     fig.update_xaxes(title_text=f"Simulated price at the end ({currency})" if currency else "")
     fig.update_yaxes(title_text="Number of simulated paths")
     fig.update_layout(bargap=0.02)
-    return _layout(fig, 340)
+    _layout(fig, 360)
+    fig.update_layout(margin={"l": 8, "r": 8, "t": 48, "b": 8})  # room for the top labels
+    return fig
