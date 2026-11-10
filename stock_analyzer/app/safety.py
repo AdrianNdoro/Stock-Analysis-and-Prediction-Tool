@@ -40,8 +40,13 @@ def parse_request(
     paths: object = MIN_PATHS,
     seed: object = None,
     benchmark: object = AUTO_BENCHMARK,
+    max_paths: int = MAX_PATHS,
 ) -> AnalysisRequest:
-    """Validate everything against allow-lists. Raises StockAnalyzerError with friendly text."""
+    """Validate everything against allow-lists. Raises StockAnalyzerError with friendly text.
+
+    ``max_paths`` lets an operator lower the ceiling on small hosts (never above MAX_PATHS).
+    """
+    max_paths = max(MIN_PATHS, min(max_paths, MAX_PATHS))
     symbol = normalize_ticker(ticker)
     if horizon not in HORIZONS:
         raise InvalidParameterError(
@@ -49,10 +54,10 @@ def parse_request(
         )
     if method not in METHODS or drift not in DRIFT_MODES:
         raise InvalidParameterError(f"method/drift {method!r}/{drift!r}")
-    if not _is_int(paths) or not MIN_PATHS <= paths <= MAX_PATHS:
+    if not _is_int(paths) or not MIN_PATHS <= paths <= max_paths:
         raise InvalidParameterError(
             f"paths {paths!r}",
-            user_message=f"Number of simulations must be between {MIN_PATHS:,} and {MAX_PATHS:,}.",
+            user_message=f"Number of simulations must be between {MIN_PATHS:,} and {max_paths:,}.",
         )
     if seed is not None and (not _is_int(seed) or not 0 <= seed <= MAX_SEED):
         raise InvalidParameterError(

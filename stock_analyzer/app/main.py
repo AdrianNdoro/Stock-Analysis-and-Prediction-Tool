@@ -26,7 +26,6 @@ from stock_analyzer.exceptions import StockAnalyzerError  # noqa: E402
 from stock_analyzer.models.monte_carlo import (  # noqa: E402
     DRIFT_MODES,
     HORIZONS,
-    MAX_PATHS,
     METHODS,
     MIN_PATHS,
 )
@@ -101,8 +100,8 @@ with st.form("request_form"):
         paths = st.number_input(
             "Number of simulations",
             min_value=MIN_PATHS,
-            max_value=MAX_PATHS,
-            value=int(settings.mc_paths),
+            max_value=settings.app_max_paths,
+            value=min(int(settings.mc_paths), settings.app_max_paths),
             step=5000,
             key="paths_input",
         )
@@ -126,6 +125,7 @@ if submitted:
             int(paths),
             None if seed is None else int(seed),
             benchmark,
+            settings.app_max_paths,
         )
         wait = _throttle().try_acquire()
         if wait:

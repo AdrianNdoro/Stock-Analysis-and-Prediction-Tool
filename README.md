@@ -1,7 +1,31 @@
-﻿# Stock Analyzer (Phases 1-4: data, analysis, risk, simulation, scenarios, backtesting)
+﻿# Stock Analyzer
+
+Describe a stock's past and simulate a range of possible futures, with an honest check of how
+reliable those ranges have been. Data, analysis, risk, simulation, scenarios, backtesting, a
+dashboard, fundamentals, report export and deployment files.
 
 Educational tool. Not financial advice. Past performance does not guarantee future results.
 Simulated outcomes are scenarios, never predictions.
+
+## How to use the tool (for users)
+
+1. Open the dashboard (see **Dashboard** below) and type a ticker: `AAPL`, `BRK-B`, `BP.L`
+   (London), `SAP.DE` (Germany), `7203.T` (Tokyo). Pick a time horizon and press **Analyse**.
+2. Read **How reliable have this model's ranges been?** first. The 1M and 3M horizons get a
+   grade (Good / Fair / Poor / Not enough history) from replaying the stock's own history.
+   6M and 1Y say "can't be verified": there is not enough history to check them. Treat
+   unverified ranges as rough.
+3. The **Possible outcomes** tab shows a fan chart (the shaded bands hold 50% and 90% of
+   simulated paths), where the paths ended, and Bull / Base / Bear scenarios with how sensitive
+   each probability is to the volatility assumption.
+4. **Price & indicators**, **Risk** and **Fundamentals** describe the past. Hover over the
+   ⓘ icons for plain-English explanations; the sidebar page **How this works** has a glossary
+   and the limitations.
+5. **Download a report** (bottom of the page) saves everything as one HTML file you can keep,
+   share, or print to PDF.
+
+None of this tells you what a price will do. The ranges are what a simple model says is
+plausible if the past volatility continues; real markets have crashes the model underestimates.
 
 ## Windows setup (Command Prompt or PowerShell)
 
@@ -111,8 +135,8 @@ python -m streamlit run stock_analyzer/app/main.py
 
 Opens at http://localhost:8501. Enter a ticker, pick a horizon, press **Analyse**. Tabs:
 Summary (with the reliability panel), Price & indicators, Possible outcomes (fan chart,
-histogram, bull/base/bear table), Risk. The **How this works** page in the sidebar lists the
-assumptions, limitations and a glossary; a disclaimer is shown on every page.
+histogram, bull/base/bear table), Risk, Fundamentals. The **How this works** page in the sidebar
+lists the assumptions, limitations and a glossary; a disclaimer is shown on every page.
 
 - **Reliability:** 1M and 3M show the Phase 4 grade. 6M and 1Y show a plain "can't be
   verified" note, because ten years of history gives too few independent checks.
@@ -125,11 +149,88 @@ assumptions, limitations and a glossary; a disclaimer is shown on every page.
 - **Tests:** `test_app_pure.py` (helpers, charts) and `test_app_ui.py` (Streamlit `AppTest`
   with a fake provider). The UI tests take about a minute and some memory.
 
+## Fundamentals, report export and risk-free rate (Phase 6)
+
+**Fundamentals** (Fundamentals tab; also `--fundamentals` in the CLI): market cap, P/E (trailing
+and expected), P/B, EPS, revenue and earnings growth, debt/equity, dividend yield. Yahoo's units
+are converted at the provider to a documented contract (fractions and ratios; see
+`data/providers/base.py`) and pinned by tests to a recorded payload
+(`tests/fixtures/yahoo_info_sample.json`). Missing data shows "Not available", never zero.
+Sector averages are **not** shown: yfinance does not supply them, and we do not invent them.
+Gotchas the tests cover: Yahoo reports dividend yield and debt/equity in percent, and
+pence-quoted stocks (BP.L) report EPS in another currency.
+
+**Report export:** the **Download a report** button builds one self-contained HTML file
+(charts, scenarios, assumptions, reliability note, fundamentals, disclaimer). By default the
+Plotly library is embedded (about 5 MB, works offline); tick "Smaller file" for a few hundred KB
+that loads Plotly from a CDN. For a PDF open the file in a browser and choose Print > Save as
+PDF. No PDF engine is bundled because the usual ones need system libraries that break on plain
+Windows installs.
+
+**Risk-free rate:** fixed by default (`RISK_FREE_RATE`). Opt in to the live US 13-week T-bill
+yield with `RISK_FREE_SOURCE=live`: cached 12 hours, rounded to the nearest 0.25%, falls back to
+the last known value and then to the fixed rate. The UI and report always say which was used. It
+is a US rate applied to every currency, so for non-US stocks it is an approximation.
+
+**Operator cap:** `APP_MAX_PATHS` lowers the most simulations a visitor can request.
+
+## Deploying
+
+```bat
+docker build -t stock-analyzer .
+docker run --rm -p 8501:8501 -v stock-analyzer-data:/data stock-analyzer
+```
+
+- [docs/HOSTING.md](docs/HOSTING.md): Streamlit Community Cloud, Render and Hugging Face Spaces,
+  with trade-offs.
+- [docs/SCALING_AND_LICENSING.md](docs/SCALING_AND_LICENSING.md): known limits, what to change as
+  usage grows, why yfinance must be replaced before a public launch, and a provider sketch.
+- GitHub Actions (`.github/workflows/ci.yml`) runs ruff and pytest on Python 3.11 and 3.12 for
+  every push and pull request, and builds the Docker image.
+
+## Architecture overview
+
+```
+ data/providers  ->  data/service  ->  analysis/pipeline  ->  models/forecast  ->  app/runner
+ (yfinance, ...)     cache, limit,      technical, risk,       simulation,          one request
+  swappable          retry, clean       fundamentals           scenarios            end to end
+                                                                  |
+                                backtest/ (walk-forward check) ---+--> reliability grade
+                                                                  |
+                       app/views + app/charts (Streamlit) and app/report (HTML export)
+```
+
+Pure functions do the maths; I/O lives in `data/service.py`, the `*_ticker` wrappers, the CLI and
+the Streamlit pages. Results are frozen dataclasses. Everything user-visible comes from the same
+functions the CLI uses, so the dashboard re-implements no logic.
+
+## Developer guide
+
+```bat
+pip install -r requirements-dev.txt
+python -m pytest                       :: about 280 tests; the Streamlit UI tests take ~1 minute
+ruff check . && ruff format --check .
+python -m streamlit run stock_analyzer/app/main.py
+```
+
+- Tests use a fake provider and clock (`tests/fakes.py`); no test touches the network. The
+  recorded Yahoo payload is a small fixture of public company figures, used only for unit tests.
+- Add a data provider: subclass `DataProvider`, follow the units contract in
+  `data/providers/base.py`, register it in `data/providers/__init__.py`.
+- Changing the model or its defaults changes cached backtests: bump `MODEL_VERSION` in
+  `backtest/report.py`. Changing what a cached fundamentals value means: bump the `v2` in the key
+  in `data/service.py`.
+- Commit messages are conventional (`feat(scope): ...`). Never commit `.env`, caches or `.venv`.
+
 ## Layout
 
 ```
+Dockerfile, .dockerignore, docker/    container image and healthcheck
+.github/workflows/ci.yml              lint + tests + image build
+docs/                                 HOSTING.md, SCALING_AND_LICENSING.md
 stock_analyzer/
-  app/               Streamlit dashboard (main.py, pages/, charts, presenters, safety, glossary)
+  app/               Streamlit dashboard (main.py, pages/, charts, presenters, safety, glossary,
+                     report.py for the HTML export)
   config.py          settings from environment variables
   exceptions.py      errors with friendly user_message text
   logging_setup.py   structured (JSON) logging
@@ -139,6 +240,7 @@ stock_analyzer/
     risk.py          volatility, drawdown, Sharpe/Sortino, beta, VaR
     benchmarks.py    benchmark list, suffix-based suggestion, currency helpers
     pipeline.py      MarketData -> AnalysisResult
+    fundamentals.py  provider values -> labelled snapshot rows (missing is never zero)
   backtest/
     walkforward.py   no-look-ahead engine (rolling/expanding windows, vol remedies)
     distributions.py closed-form GBM, fast bootstrap (backtest-only), baselines
@@ -157,6 +259,7 @@ stock_analyzer/
     cache.py         shared SQLite cache (WAL, thread/process safe)
     cleaning.py      validation and quality report
     resilience.py    rate limiter + retry with backoff
+    risk_free.py     fixed or (opt-in) live T-bill rate, cached, with fallbacks
     service.py       cache -> limit -> retry -> provider -> clean
     validation.py    ticker sanitising
   tests/
@@ -167,8 +270,12 @@ stock_analyzer/
 Subclass `DataProvider` (`data/providers/base.py`), register it in
 `data/providers/__init__.py`, set `DATA_PROVIDER` and `DATA_PROVIDER_API_KEY` in `.env`.
 
-## Known limits (Phase 1)
+## Known limits
 
-* yfinance is unofficial and personal-use oriented: fine for development, not for a public launch.
+* yfinance is unofficial and personal-use oriented: fine for development, not for a public launch
+  (see docs/SCALING_AND_LICENSING.md).
 * On free hosts the SQLite file may be wiped on restart; the cache simply rebuilds.
-* Fundamentals unit normalisation (dividend yield, debt/equity) comes in Phase 6.
+* Fundamentals are a snapshot from Yahoo: reported late, sometimes revised, and without sector
+  averages. Dividend yield for a stock with an unusual quote unit may still be wrong; the
+  provider drops values above 30%.
+* The per-session throttle does not stop one person opening many tabs; use edge rate limiting.

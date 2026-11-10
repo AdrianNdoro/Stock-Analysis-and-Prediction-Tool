@@ -82,6 +82,7 @@ class Settings:
     default_benchmark: str = "^GSPC"  # S&P 500
 
     mc_paths: int = 10_000  # simulated paths per run (allowed range 10,000 - 50,000)
+    app_max_paths: int = 50_000  # dashboard ceiling; lower it on small hosts (100 MB per 50k run)
     mc_lookback_years: float = 3.0  # history used to calibrate volatility and drift
     mc_drift_mode: str = "shrunk"  # shrunk | historical | neutral
 
@@ -138,6 +139,9 @@ class Settings:
                 env.get("DEFAULT_BENCHMARK", "").strip() or d.default_benchmark
             ).upper(),
             mc_paths=int(_num(env, "MC_PATHS", d.mc_paths, minimum=10_000, maximum=50_000)),
+            app_max_paths=int(
+                _num(env, "APP_MAX_PATHS", d.app_max_paths, minimum=10_000, maximum=50_000)
+            ),
             mc_lookback_years=_num(
                 env, "MC_LOOKBACK_YEARS", d.mc_lookback_years, minimum=1.0, maximum=10.0
             ),

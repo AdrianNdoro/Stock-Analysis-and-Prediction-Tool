@@ -1,0 +1,6 @@
+[browser]
+# No usage analytics. (Any future analytics must be opt-in and anonymous.)
+gatherUsageStats = false
+
+[server]
+enableXsrfProtection = true

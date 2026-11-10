@@ -30,7 +30,7 @@ from stock_analyzer.data.risk_free import (
 )
 from stock_analyzer.data.service import MarketDataService
 from stock_analyzer.data.types import Fundamentals
-from stock_analyzer.exceptions import ConfigError
+from stock_analyzer.exceptions import ConfigError, InvalidParameterError
 from stock_analyzer.tests.fakes import FakeClock, make_prices
 from stock_analyzer.tests.test_benchmarks_and_pipeline import MultiProvider
 
@@ -269,6 +269,24 @@ def test_rate_is_rounded_to_quarter_percent_and_applied_to_settings(live_setting
     r = fixed_rate(Settings(risk_free_rate=0.0275))
     assert with_rate(live_settings, r).risk_free_rate == 0.0275
     assert live_settings.risk_free_rate == 0.04  # the original is not mutated
+
+
+def test_operator_can_lower_the_path_ceiling_but_never_raise_it():
+    assert parse_request("AAPL", "3M", paths=20_000, max_paths=20_000).paths == 20_000
+    with pytest.raises(InvalidParameterError) as exc:
+        parse_request("AAPL", "3M", paths=30_000, max_paths=20_000)
+    assert "20,000" in exc.value.user_message
+    with pytest.raises(InvalidParameterError):  # the public hard limit still applies
+        parse_request("AAPL", "3M", paths=50_001, max_paths=10**9)
+    assert parse_request("AAPL", "3M", paths=10_000, max_paths=1).paths == 10_000  # floor
+
+
+def test_config_parses_app_max_paths():
+    assert Settings.from_env({}).app_max_paths == 50_000  # default behaviour unchanged
+    assert Settings.from_env({"APP_MAX_PATHS": "20000"}).app_max_paths == 20_000
+    for bad in ("5000", "60000", "lots"):
+        with pytest.raises(ConfigError):
+            Settings.from_env({"APP_MAX_PATHS": bad})
 
 
 def test_config_parses_risk_free_source():
