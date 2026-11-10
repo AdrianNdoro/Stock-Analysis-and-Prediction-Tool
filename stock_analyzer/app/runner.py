@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import pandas as pd
 
+from stock_analyzer.analysis.fundamentals import FundamentalsSnapshot, build_snapshot
 from stock_analyzer.analysis.pipeline import analyze_ticker
 from stock_analyzer.analysis.technical import adjusted_ohlc, compute_indicators
 from stock_analyzer.app.presenters import ALL_HORIZONS
 from stock_analyzer.app.safety import AnalysisRequest
 from stock_analyzer.config import Settings
+from stock_analyzer.data.risk_free import RiskFreeRate
 from stock_analyzer.data.service import MarketDataService
 from stock_analyzer.models.forecast import ForecastResult, forecast, reliability_for
+
+log = logging.getLogger("stock_analyzer.app")
 
 
 @dataclass(frozen=True, eq=False)
@@ -22,6 +27,9 @@ class AppResult:
     ohlc: pd.DataFrame  # split/dividend-adjusted OHLCV, for the price chart
     indicators: pd.DataFrame
     data_date: str  # last price date: part of the cache key, so a new bar means a fresh run
+    fundamentals: FundamentalsSnapshot | None = None  # None only if building it failed
+    risk_free: RiskFreeRate | None = None
+    provider: str | None = None  # data source name, for the report
 
 
 def last_data_date(service: MarketDataService, ticker: str) -> str:
@@ -30,7 +38,11 @@ def last_data_date(service: MarketDataService, ticker: str) -> str:
 
 
 def run_request(
-    service: MarketDataService, settings: Settings, req: AnalysisRequest, data_date: str
+    service: MarketDataService,
+    settings: Settings,
+    req: AnalysisRequest,
+    data_date: str,
+    risk_free: RiskFreeRate | None = None,
 ) -> AppResult:
     """Fetch, analyse, simulate and attach reliability for ALL horizons.
 
@@ -38,7 +50,8 @@ def run_request(
     3M grades whichever horizon is selected. Raises StockAnalyzerError with friendly text.
     """
     analysis = analyze_ticker(service, req.ticker, req.benchmark, settings)
-    ohlc = adjusted_ohlc(service.get_market_data(req.ticker).prices)
+    market = service.get_market_data(req.ticker)
+    ohlc = adjusted_ohlc(market.prices)
     rel = reliability_for(analysis, ALL_HORIZONS, req.method, req.drift, settings)
     fc = forecast(
         analysis,
@@ -50,4 +63,12 @@ def run_request(
         lookback_years=settings.mc_lookback_years,
         reliability=rel,
     )
-    return AppResult(req, fc, ohlc, compute_indicators(ohlc), data_date)
+    try:  # fundamentals are a bonus: the service never raises for provider trouble, but be safe
+        snapshot = build_snapshot(service.get_fundamentals(req.ticker))
+    except Exception:  # noqa: BLE001
+        log.warning("fundamentals failed", extra={"ticker": req.ticker})
+        snapshot = None
+    return AppResult(
+        req, fc, ohlc, compute_indicators(ohlc), data_date, snapshot, risk_free,
+        market.source,
+    )  # fmt: skip

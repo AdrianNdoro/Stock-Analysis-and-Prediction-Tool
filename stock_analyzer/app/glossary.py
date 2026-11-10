@@ -98,6 +98,47 @@ GLOSSARY: dict[str, tuple[str, str]] = {
         "The average yearly return assumed in the simulation. It is the hardest input to "
         "estimate, so the default blends the stock's history with a long-run market assumption.",
     ),
+    "market_cap": (
+        "Market cap",
+        "The total stock-market value of a company: share price times number of shares. "
+        "It shows size, not whether the stock is cheap or expensive.",
+    ),
+    "pe": (
+        "P/E ratio",
+        "Price divided by earnings per share. 20x means investors pay 20 for each 1 of yearly "
+        "profit. High can mean growth is expected or the stock is pricey; it depends on the "
+        "industry. 'Expected' uses analysts' forecasts of next year's profit.",
+    ),
+    "pb": (
+        "P/B ratio",
+        "Price divided by the company's book value (assets minus debts) per share. Below 1 "
+        "means the market values the company at less than its accounting net worth.",
+    ),
+    "eps": (
+        "Earnings per share",
+        "Profit over the last 12 months divided by the number of shares. It is reported in "
+        "the currency the company reports in, which can differ from the trading currency.",
+    ),
+    "growth": (
+        "Revenue and earnings growth",
+        "Change in sales (or profit) in the latest reported quarter compared with the same "
+        "quarter a year earlier. Big percentages often come from a small starting point.",
+    ),
+    "debt_to_equity": (
+        "Debt / equity",
+        "Total debt divided by shareholders' equity. 1.0x means debt equals equity. Higher "
+        "means more borrowing, which adds risk when profits fall. Not meaningful for banks.",
+    ),
+    "dividend_yield": (
+        "Dividend yield",
+        "Yearly dividend per share divided by the share price. 3% means about 3 in dividends "
+        "for every 100 invested. Dividends can be cut, so it is not guaranteed income.",
+    ),
+    "risk_free": (
+        "Risk-free rate",
+        "The yearly return on a very safe investment, such as a short-term US Treasury bill. "
+        "Used as the baseline for the Sharpe and Sortino ratios and as the 'neutral' drift.",
+    ),
 }
 
 

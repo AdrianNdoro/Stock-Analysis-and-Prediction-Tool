@@ -9,6 +9,7 @@ to the public, switch to a licensed API through the :class:`DataProvider` interf
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 from datetime import date
 from typing import Any
@@ -24,8 +25,7 @@ from stock_analyzer.exceptions import (
 
 log = logging.getLogger(__name__)
 
-# Our field name -> Yahoo ``info`` key.
-# TODO(Phase 6): normalise units (Yahoo's dividendYield and debtToEquity units vary by version).
+# Our field name -> Yahoo ``info`` key (dividend_yield and debt_to_equity are converted below).
 _INFO_MAP = {
     "pe_ratio": "trailingPE",
     "forward_pe": "forwardPE",
@@ -39,7 +39,50 @@ _INFO_MAP = {
     "sector": "sector",
     "industry": "industry",
     "currency": "currency",
+    "financial_currency": "financialCurrency",
+    "quote_type": "quoteType",
 }
+
+MAX_PLAUSIBLE_YIELD = 0.30  # a >30% dividend yield is almost always a data error
+
+
+def _number(value: Any) -> float | None:
+    """A finite float, or None (also for bools, strings, NaN and inf)."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    x = float(value)
+    return x if math.isfinite(x) else None
+
+
+def dividend_yield_fraction(info: dict[str, Any]) -> float | None:
+    """Yahoo's ``dividendYield`` as a fraction (0.03 = 3%), whatever unit this version uses.
+
+    Recorded behaviour: yfinance 1.8.0 returns PERCENT (AAPL 0.31 means 0.31%); older versions
+    returned a fraction (0.0031). The two cannot be told apart from the number alone for small
+    yields, so we cross-check ``trailingAnnualDividendYield`` (always a fraction) and keep the
+    reading that agrees with it to within 3x. That field is unreliable for pence-quoted stocks
+    (BP.L: dividend in pounds, price in pence), so when neither reading agrees we assume
+    percent, which is what the current API returns.
+    """
+    raw = _number(info.get("dividendYield"))
+    if raw is None or raw < 0:
+        return None
+    if raw == 0:
+        return 0.0
+    as_percent, as_fraction = raw / 100, raw
+    trailing = _number(info.get("trailingAnnualDividendYield"))
+    chosen = as_percent
+    if trailing and trailing > 0:
+        near = [c for c in (as_percent, as_fraction) if 1 / 3 <= c / trailing <= 3]
+        if len(near) == 1:
+            chosen = near[0]
+    return chosen if chosen <= MAX_PLAUSIBLE_YIELD else None
+
+
+def debt_to_equity_ratio(info: dict[str, Any]) -> float | None:
+    """Yahoo reports debt/equity in percent (84.3 means 0.843x); convert to a plain ratio."""
+    raw = _number(info.get("debtToEquity"))
+    return None if raw is None or raw < 0 else raw / 100
 
 
 def _map_exception(exc: Exception) -> StockAnalyzerError:
@@ -98,4 +141,10 @@ class YFinanceProvider(DataProvider):
             raise
         except Exception as exc:
             raise _map_exception(exc) from exc
-        return {name: info.get(_INFO_MAP[name]) for name in FUNDAMENTAL_FIELDS}
+        values = {name: info.get(_INFO_MAP[name]) for name in FUNDAMENTAL_FIELDS}
+        for name in ("pe_ratio", "forward_pe", "pb_ratio", "eps_ttm", "market_cap",
+                     "revenue_growth", "earnings_growth"):  # fmt: skip
+            values[name] = _number(values[name])
+        values["dividend_yield"] = dividend_yield_fraction(info)
+        values["debt_to_equity"] = debt_to_equity_ratio(info)
+        return values

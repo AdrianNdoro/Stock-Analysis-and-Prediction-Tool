@@ -21,6 +21,7 @@ from stock_analyzer.app.safety import (  # noqa: E402
     RequestThrottle,
     parse_request,
 )
+from stock_analyzer.data.risk_free import with_rate  # noqa: E402
 from stock_analyzer.exceptions import StockAnalyzerError  # noqa: E402
 from stock_analyzer.models.monte_carlo import (  # noqa: E402
     DRIFT_MODES,
@@ -45,9 +46,11 @@ def cached_run(
     seed: int | None,
     benchmark: str | None,
     data_date: str,  # in the key: a new price bar means a fresh analysis
+    rf_value: float,  # in the key: a different risk-free rate means a fresh analysis
+    _rate,
 ) -> AppResult:
     req = AnalysisRequest(ticker, horizon, method, drift, paths, seed, benchmark)
-    return run_request(_service, _settings, req, data_date)
+    return run_request(_service, _settings, req, data_date, _rate)
 
 
 def _throttle() -> RequestThrottle:
@@ -61,7 +64,8 @@ st.title("Stock Analyzer")
 st.caption("Describe a stock's past and simulate a range of possible futures. Not a prediction.")
 
 service = services.get_service()
-settings = services.get_app_settings()
+rate = services.get_risk_free()
+settings = with_rate(services.get_app_settings(), rate)  # every model reads settings.risk_free_rate
 
 with st.form("request_form"):
     ticker = st.text_input(
@@ -156,6 +160,8 @@ try:
             req.seed,
             req.benchmark,
             data_date,
+            rate.value,
+            rate,
         )
 except Exception as exc:  # noqa: BLE001 - never show a stack trace to a user
     if not isinstance(exc, StockAnalyzerError):
@@ -163,8 +169,8 @@ except Exception as exc:  # noqa: BLE001 - never show a stack trace to a user
     st.error(friendly_error(exc))
     st.stop()
 
-tab_summary, tab_price, tab_forecast, tab_risk = st.tabs(
-    ["Summary", "Price & indicators", "Possible outcomes", "Risk"]
+tab_summary, tab_price, tab_forecast, tab_risk, tab_fund = st.tabs(
+    ["Summary", "Price & indicators", "Possible outcomes", "Risk", "Fundamentals"]
 )
 with tab_summary:
     views.render_summary(res)
@@ -174,3 +180,6 @@ with tab_forecast:
     views.render_forecast(res)
 with tab_risk:
     views.render_risk(res)
+with tab_fund:
+    views.render_fundamentals(res)
+views.render_export(res)

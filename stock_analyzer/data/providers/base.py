@@ -30,7 +30,19 @@ FUNDAMENTAL_FIELDS = [
     "sector",
     "industry",
     "currency",
+    "financial_currency",
+    "quote_type",
 ]
+
+# UNITS CONTRACT for get_fundamentals (a provider converts its own conventions to these):
+#   pe_ratio, forward_pe, pb_ratio  plain ratios (22.1 means 22.1x)
+#   eps_ttm                         per share, in ``financial_currency`` (may differ from the
+#                                   trading ``currency``, e.g. BP.L trades in GBp, reports in USD)
+#   revenue_growth, earnings_growth fractions, latest quarter vs the same quarter a year earlier
+#   debt_to_equity                  ratio (0.84 means debt is 84% of equity)
+#   dividend_yield                  fraction (0.03 means 3%); 0.0 only if the provider says "none"
+#   market_cap                      in the major unit of ``currency`` (pounds, not pence)
+# Anything unknown or implausible is None. Never 0 for "unknown".
 
 
 class DataProvider(ABC):

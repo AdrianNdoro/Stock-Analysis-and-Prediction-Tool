@@ -76,7 +76,8 @@ class Settings:
     recommended_history_days: int = 504  # ~2 trading years: below this we warn
     stale_bar_days: int = 10  # warn if the newest price bar is older than this
 
-    risk_free_rate: float = 0.04  # annual, as a fraction. Live T-bill fetch is planned later.
+    risk_free_rate: float = 0.04  # annual fraction; the fixed value, and the live fallback
+    risk_free_source: str = "fixed"  # fixed | live (live = US 13-week T-bill, opt-in)
     risk_lookback_years: float = 3.0  # window for volatility, Sharpe, Sortino, beta and VaR
     default_benchmark: str = "^GSPC"  # S&P 500
 
@@ -126,6 +127,9 @@ class Settings:
             stale_bar_days=int(_num(env, "STALE_BAR_DAYS", d.stale_bar_days, minimum=1)),
             risk_free_rate=_num(
                 env, "RISK_FREE_RATE", d.risk_free_rate, minimum=-0.05, maximum=0.5
+            ),
+            risk_free_source=_choice(
+                env, "RISK_FREE_SOURCE", d.risk_free_source, ("fixed", "live")
             ),
             risk_lookback_years=_num(
                 env, "RISK_LOOKBACK_YEARS", d.risk_lookback_years, minimum=1.0, maximum=10.0

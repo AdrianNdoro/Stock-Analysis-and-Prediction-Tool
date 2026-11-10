@@ -3,12 +3,15 @@ existing analysis/model code and ``presenters`` (nothing is re-implemented here)
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pandas as pd
 import streamlit as st
 
 from stock_analyzer.app import glossary as g
 from stock_analyzer.app.charts import PriceChartOptions, fan_chart, price_chart, terminal_histogram
 from stock_analyzer.app.presenters import reliability_views, risk_rows, scenario_table
+from stock_analyzer.app.report import build_html_report, report_filename
 from stock_analyzer.app.runner import AppResult
 
 
@@ -181,12 +184,56 @@ def render_forecast(res: AppResult) -> None:
     )
 
 
+def render_fundamentals(res: AppResult) -> None:
+    snap = res.fundamentals
+    if snap is None or not snap.available:
+        st.info("Fundamental data isn't available for this ticker right now.", icon="ℹ️")
+        return
+    where = " / ".join(x for x in (snap.sector, snap.industry) if x)
+    if where:
+        st.caption(where)
+    for row in snap.rows:
+        st.metric(row.label, row.value, help=g.tip(row.key))
+        if row.note:
+            st.caption(row.note)
+    for note in snap.notes:
+        st.caption(note)
+
+
+def render_export(res: AppResult) -> None:
+    """Build the HTML report on request (it is a few MB), then offer it for download."""
+    st.markdown("#### Download a report")
+    st.caption(
+        "A single HTML file with the charts, scenarios, assumptions, reliability note and "
+        "disclaimer. Open it in a browser; use Print > Save as PDF if you want a PDF."
+    )
+    small = st.checkbox(
+        "Smaller file (the charts then need an internet connection to draw)", key="report_small"
+    )
+    token = (res.request, res.data_date, small)
+    if st.button("Prepare report", key="report_prepare"):
+        now = datetime.now(UTC)
+        html_text = build_html_report(res, generated_at=now, inline_js=not small)
+        st.session_state["report"] = (token, report_filename(res, now), html_text.encode("utf-8"))
+    ready = st.session_state.get("report")
+    if ready and ready[0] == token:
+        st.download_button(
+            "Download report (HTML)",
+            data=ready[2],
+            file_name=ready[1],
+            mime="text/html",
+            key="report_download",
+        )
+
+
 def render_risk(res: AppResult) -> None:
     a = res.forecast.analysis
     r = a.risk
     st.caption(f"Based on {r.n_returns} daily returns from {r.window_start} to {r.window_end}.")
     for label, value, key in risk_rows(r, a.benchmark):
         st.metric(label, value, help=g.tip(key))
+    if res.risk_free:
+        st.caption(res.risk_free.label, help=g.tip("risk_free"))
     st.markdown("#### In plain English")
     for line in a.risk_bullets:
         st.markdown(f"- {line}")

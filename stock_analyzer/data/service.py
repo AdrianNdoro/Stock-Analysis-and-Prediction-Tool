@@ -117,7 +117,8 @@ class MarketDataService:
     def get_fundamentals(self, ticker: str) -> Fundamentals:
         """Fundamental snapshot. Never raises for provider trouble: degrades gracefully."""
         symbol = normalize_ticker(ticker)
-        key = f"fundamentals:{self._provider.name}:{symbol}"
+        # v2: units contract (fractions/ratios). Old v1 entries held Yahoo's raw units.
+        key = f"fundamentals:v2:{self._provider.name}:{symbol}"
         ttl = self._s.cache_ttl_fundamentals_hours * 3600
 
         entry = self._cache_get(key)

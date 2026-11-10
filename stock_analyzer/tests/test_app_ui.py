@@ -70,8 +70,11 @@ def test_valid_ticker_renders_all_sections(make_app):
     at = submit(make_app(good_provider()), "aapl")
     assert not at.exception and not at.error
     assert [t.label for t in at.tabs] == [
-        "Summary", "Price & indicators", "Possible outcomes", "Risk",
+        "Summary", "Price & indicators", "Possible outcomes", "Risk", "Fundamentals",
     ]  # fmt: skip
+    # the fake provider has no fundamentals: the tab says so instead of showing zeros
+    assert "isn't available" in texts(at.info)
+    assert "risk-free rate 4.00%" in texts(at.caption).lower()
     labels = {m.label for m in at.metric}
     assert {"Volatility (yearly)", "1M horizon", "3M horizon", "Sharpe ratio"} <= labels
     # the 1M/3M grades are shown as grades; 6M and 1Y get the plain "can't be verified" note
@@ -84,6 +87,22 @@ def test_valid_ticker_renders_all_sections(make_app):
     assert "Bull / Base / Bear" in md and "In plain English" in md
     assert at.session_state["request"].ticker == "AAPL"
     assert len(at.get("plotly_chart")) == 3  # price, fan chart, histogram
+
+
+def test_report_is_prepared_on_request_and_then_offered_for_download(make_app):
+    at = submit(make_app(good_provider()), "AAPL")
+    assert not at.get("download_button")  # nothing is built until asked: it is a few MB
+    at.checkbox(key="report_small").check()  # small file: keeps the test light
+    at.button(key="report_prepare").click()
+    at.run()
+    assert not at.exception and not at.error
+    buttons = at.get("download_button")
+    assert len(buttons) == 1
+    assert at.session_state["report"][1].startswith("stock-analyzer-AAPL-")
+    html_bytes = at.session_state["report"][2]
+    assert (
+        html_bytes.startswith(b"<!doctype html>") and b"not financial advice" in html_bytes.lower()
+    )
 
 
 def test_chart_toggles_rerun_without_new_analysis(make_app):
