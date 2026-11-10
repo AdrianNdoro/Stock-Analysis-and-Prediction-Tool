@@ -240,18 +240,18 @@ def terminal_histogram(
             showlegend=False,
         )
     )
-    marks = [
-        ("Today", sim.s0, NEUTRAL),
-        ("5th", sim.percentile(5), DOWN),
-        ("Median", sim.percentile(50), f"rgb({BAND})"),
-        ("95th", sim.percentile(95), UP),
+    marks = [  # Today and Median are often close, so their labels go on opposite sides
+        ("Today", sim.s0, NEUTRAL, "top left"),
+        ("5th", sim.percentile(5), DOWN, "top"),
+        ("Median", sim.percentile(50), f"rgb({BAND})", "top right"),
+        ("95th", sim.percentile(95), UP, "top"),
     ]
-    for label, x, colour in marks:
+    for label, x, colour, position in marks:
         fig.add_vline(
             x=x,
             line={"width": 1.5, "dash": "dash", "color": colour},
             annotation_text=label,
-            annotation_position="top",
+            annotation_position=position,
         )
     fig.update_xaxes(title_text=f"Simulated price at the end ({currency})" if currency else "")
     fig.update_yaxes(title_text="Number of simulated paths")

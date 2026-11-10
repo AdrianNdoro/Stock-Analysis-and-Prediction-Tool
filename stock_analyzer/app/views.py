@@ -59,7 +59,9 @@ def render_summary(res: AppResult) -> None:
         "Volatility (yearly)", f"{a.risk.annualised_volatility:.0%}", help=g.tip("volatility")
     )
     c2.metric("Max drawdown", f"{a.risk.drawdown.max_drawdown:.0%}", help=g.tip("drawdown"))
-    c3.metric("Chart picture", a.technical.trend_label, help=g.tip("sma_ema"))
+    # st.metric truncates long values with "...", so this one is plain text
+    c3.markdown("Chart picture", help=g.tip("sma_ema"))
+    c3.markdown(f"#### {a.technical.trend_label}")
     render_reliability(res, "summary")
     st.markdown(f"#### In plain English ({res.request.horizon} horizon)")
     for line in sim.plain_english(a.currency):
