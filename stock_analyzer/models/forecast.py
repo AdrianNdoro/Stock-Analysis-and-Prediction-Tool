@@ -100,7 +100,7 @@ def forecast_ticker(
     drift = drift_mode or settings.mc_drift_mode
     reliability = None
     if with_reliability:
-        reliability = _reliability_for(analysis, horizons, method, drift, settings)
+        reliability = reliability_for(analysis, horizons, method, drift, settings)
     return forecast(
         analysis,
         horizons,
@@ -113,7 +113,7 @@ def forecast_ticker(
     )
 
 
-def _reliability_for(
+def reliability_for(
     analysis: AnalysisResult,
     horizons: Sequence[str],
     method: str,

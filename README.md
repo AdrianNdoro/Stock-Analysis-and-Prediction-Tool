@@ -103,10 +103,33 @@ the sample; checks at the same horizon overlap in time; a constant risk-free rat
 all years. A good grade means "the ranges were about the right width in the past", never
 "the next price will land in the range".
 
+## Dashboard (Phase 5)
+
+```
+python -m streamlit run stock_analyzer/app/main.py
+```
+
+Opens at http://localhost:8501. Enter a ticker, pick a horizon, press **Analyse**. Tabs:
+Summary (with the reliability panel), Price & indicators, Possible outcomes (fan chart,
+histogram, bull/base/bear table), Risk. The **How this works** page in the sidebar lists the
+assumptions, limitations and a glossary; a disclaimer is shown on every page.
+
+- **Reliability:** 1M and 3M show the Phase 4 grade. 6M and 1Y show a plain "can't be
+  verified" note, because ten years of history gives too few independent checks.
+- **Safety:** tickers go through `normalize_ticker`; horizon, method, drift, paths and seed are
+  checked against allow-lists and limits; each session is throttled (8 analyses per minute);
+  errors show friendly text, never stack traces.
+- **Concurrency:** one `MarketDataService` per process (`st.cache_resource`); analyses are cached
+  with `st.cache_data` keyed by the request and the latest price date; sessions share no state.
+- **Privacy:** no accounts, no analytics, nothing about users is stored or logged.
+- **Tests:** `test_app_pure.py` (helpers, charts) and `test_app_ui.py` (Streamlit `AppTest`
+  with a fake provider). The UI tests take about a minute and some memory.
+
 ## Layout
 
 ```
 stock_analyzer/
+  app/               Streamlit dashboard (main.py, pages/, charts, presenters, safety, glossary)
   config.py          settings from environment variables
   exceptions.py      errors with friendly user_message text
   logging_setup.py   structured (JSON) logging

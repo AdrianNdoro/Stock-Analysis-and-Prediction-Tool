@@ -1,6 +1,8 @@
-# Runtime dependencies (Phase 1). Later phases add statsmodels, plotly, streamlit, etc.
+# Runtime dependencies (Phase 1). Later phases add statsmodels, etc.
 pandas>=2.2
 numpy>=1.26
 yfinance>=0.2.54
 python-dotenv>=1.0
 scipy>=1.13  # Phase 4: statistical tests (binomial, chi-square, KS)
+streamlit>=1.40  # Phase 5: dashboard (pure-Python wheel; pyarrow has Windows wheels)
+plotly>=5.24  # Phase 5: interactive charts
